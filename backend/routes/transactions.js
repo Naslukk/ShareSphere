@@ -61,5 +61,38 @@ router.get('/', authMiddleware, async (req, res) => {
     res.status(500).send('Server Error');
   }
 });
+router.post('/quick-complete', authMiddleware, async (req, res) => {
+  try {
+    const { consumerId, resourceId } = req.body;
+    const providerId = req.user.id;
+    
+    const transaction = new Transaction({ providerId, consumerId, resourceId, status: 'completed' });
+    
+    if (resourceId) {
+      await Resource.findByIdAndUpdate(resourceId, { status: 'completed' });
+    }
+
+    const provider = await User.findById(providerId);
+    if (provider) {
+      provider.communityImpactScore = (provider.communityImpactScore || 0) + 10;
+      provider.trustScore = (provider.trustScore || 100) + 2;
+      provider.exchangesCompleted = (provider.exchangesCompleted || 0) + 1;
+      provider.co2Saved = (provider.co2Saved || 0) + 12.5;
+      await provider.save();
+    }
+
+    const consumer = await User.findById(consumerId);
+    if (consumer) {
+      consumer.exchangesCompleted = (consumer.exchangesCompleted || 0) + 1;
+      consumer.co2Saved = (consumer.co2Saved || 0) + 12.5;
+      await consumer.save();
+    }
+
+    await transaction.save();
+    res.json(transaction);
+  } catch (err) {
+    res.status(500).send('Server Error');
+  }
+});
 
 export default router;
