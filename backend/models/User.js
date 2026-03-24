@@ -10,6 +10,8 @@ const UserSchema = new mongoose.Schema({
   },
   trustScore: { type: Number, default: 100 },
   communityImpactScore: { type: Number, default: 0 },
+  exchangesCompleted: { type: Number, default: 0 },
+  co2Saved: { type: Number, default: 0 },
   badges: [{ type: String }],
   createdAt: { type: Date, default: Date.now }
 });

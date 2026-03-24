@@ -11,6 +11,9 @@ export default function Chats() {
   const [activeSession, setActiveSession] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
+  const [exchangeModalOpen, setExchangeModalOpen] = useState(false);
+  const [myActiveResources, setMyActiveResources] = useState([]);
+  const [selectedResourceId, setSelectedResourceId] = useState('');
   const myId = localStorage.getItem('userId');
   const messagesEndRef = useRef(null);
   const location = useLocation();
@@ -140,6 +143,40 @@ export default function Chats() {
     } catch(e) { console.log(e); }
   };
 
+  const fetchMyResourcesForExchange = async () => {
+     try {
+        const res = await axios.get('http://localhost:5000/api/resources/me', { headers: { 'x-auth-token': localStorage.getItem('token') }});
+        setMyActiveResources(res.data.filter(r => r.status !== 'completed'));
+        setExchangeModalOpen(true);
+     } catch (err) { console.error(err); }
+  };
+
+  const handleCompleteExchange = async () => {
+     if (!selectedResourceId) return alert('Please select a resource');
+     try {
+        await axios.post('http://localhost:5000/api/transactions/quick-complete', {
+           consumerId: activeSession.userId,
+           resourceId: selectedResourceId
+        }, { headers: { 'x-auth-token': localStorage.getItem('token') }});
+        
+        setExchangeModalOpen(false);
+        alert('Exchange completed successfully! Metrics updated.');
+        
+        const msgData = {
+          receiverId: activeSession.userId,
+          text: `✅ I've marked our exchange as completed! Our Trust Scores have been boosted.`,
+          senderId: myId,
+          senderName: localStorage.getItem('userName'),
+          timestamp: new Date().toISOString()
+        };
+        socket.emit('sendMessage', msgData);
+        setMessages(prev => [...prev, { senderId: myId, text: msgData.text, timestamp: msgData.timestamp, isRead: false }]);
+        setSelectedResourceId('');
+     } catch (err) {
+        alert('Failed to complete exchange');
+     }
+  };
+
   return (
     <div className="flex flex-col md:flex-row flex-grow h-[calc(100vh-64px)] bg-[#efeae2] border-t border-gray-200">
       {/* Sidebar inbox */}
@@ -183,6 +220,12 @@ export default function Chats() {
              <div className="p-3 bg-gray-50 border-b border-gray-200 shadow-sm flex items-center gap-3 shrink-0 sticky top-0 z-10">
                 <UserCircle className="text-gray-400 w-10 h-10"/> 
                 <h2 className="font-bold text-lg text-gray-800 flex-1">{activeSession.userName}</h2>
+                <button
+                   onClick={fetchMyResourcesForExchange}
+                   className="px-4 py-1.5 text-sm font-bold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-full transition-colors"
+                >
+                   Complete Exchange
+                </button>
                 <button 
                    onClick={clearChat}
                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
@@ -233,6 +276,42 @@ export default function Chats() {
            </div>
          )}
       </div>
+
+      {/* Exchange Modal */}
+      {exchangeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 relative">
+            <button onClick={() => setExchangeModalOpen(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <h2 className="text-2xl font-extrabold text-gray-900 mb-2">Complete Exchange</h2>
+            <p className="text-gray-500 mb-6 text-sm">Select the item you are giving to {activeSession?.userName || 'this user'}. This will boost both of your Trust Scores and CO2 metrics!</p>
+            
+            {myActiveResources.length === 0 ? (
+               <p className="text-red-500 text-sm mb-4">You have no active posts to exchange.</p>
+            ) : (
+               <select 
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl mb-4 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  value={selectedResourceId}
+                  onChange={(e) => setSelectedResourceId(e.target.value)}
+               >
+                  <option value="">-- Select an item --</option>
+                  {myActiveResources.map(r => (
+                     <option key={r._id} value={r._id}>{r.title} ({r.type})</option>
+                  ))}
+               </select>
+            )}
+
+            <button 
+               onClick={handleCompleteExchange}
+               disabled={!selectedResourceId}
+               className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            >
+               Confirm Exchange
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
